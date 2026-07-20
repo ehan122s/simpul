@@ -12,13 +12,22 @@ use Illuminate\Http\Request;
 
 class ActivityController extends Controller
 {
-    public function index(Request $request)
+    protected $fileUploadService;
+    protected $reportService;
+
+    public function __construct(FileUploadService $fileUploadService, ReportGeneratorService $reportService)
     {
-        // Menampilkan data kegiatan milik penyuluh yang login, urut terbaru
+        $this->fileUploadService = $fileUploadService;
+        $this->reportService = $reportService;
+    }
+
+    public function index()
+    {
         $activities = Activity::where('user_id', auth()->id())
-                        ->orderBy('activity_date', 'desc')
-                        ->paginate(10);
-                        
+            ->with('category')
+            ->latest()
+            ->paginate(10);
+
         return view('penyuluh.activities.index', compact('activities'));
     }
 
@@ -28,49 +37,90 @@ class ActivityController extends Controller
         return view('penyuluh.activities.create', compact('categories'));
     }
 
-    // Menggunakan Form Request & FileUploadService (Dependency Injection)
-    public function store(StoreActivityRequest $request, FileUploadService $fileService)
+    public function store(StoreActivityRequest $request)
     {
-        // 1. Simpan data teks ke tabel activities
-        $activity = auth()->user()->activities()->create($request->validated());
+        $validated = $request->validated();
+        $validated['user_id'] = auth()->id();
 
-        // 2. Simpan file menggunakan Service
+        // Simpan data utama kegiatan
+        $activity = Activity::create($validated);
+
+        // Upload Foto Kegiatan jika ada
         if ($request->hasFile('photos')) {
-            $fileService->uploadPhotos($activity->id, $request->file('photos'));
+            $this->fileUploadService->uploadPhotos($activity, $request->file('photos'));
         }
 
+        // Upload Dokumen Lampiran jika ada
         if ($request->hasFile('documents')) {
-            $fileService->uploadDocuments($activity->id, $request->file('documents'));
+            $this->fileUploadService->uploadDocuments($activity, $request->file('documents'));
         }
 
-        // 3. Redirect dengan notifikasi sukses
         return redirect()->route('penyuluh.activities.index')
-                         ->with('success', 'Kegiatan berhasil disimpan beserta dokumen/fotonos.');
+            ->with('success', 'Laporan kegiatan berhasil disimpan dan dikirim!');
     }
 
     public function show(Activity $activity)
     {
-        // Proteksi: Pastikan penyuluh hanya bisa melihat kegiatannya sendiri
+        // Pastikan penyuluh hanya bisa melihat kegiatannya sendiri
         if ($activity->user_id !== auth()->id()) {
-            abort(403, 'Anda tidak diizinkan mengakses dokumen ini.');
+            abort(403, 'Anda tidak memiliki akses ke laporan ini.');
         }
 
-        $activity->load(['category', 'photos', 'documents']); // Eager loading relasi
-        
+        $activity->load(['category', 'photos', 'documents']);
         return view('penyuluh.activities.show', compact('activity'));
     }
 
-    // Fungsi untuk memanggil layanan generate laporan
-    public function generateReport(Activity $activity, Request $request, ReportGeneratorService $reportService)
+    public function edit(Activity $activity)
     {
-        if ($activity->user_id !== auth()->id()) abort(403);
-
-        $format = $request->query('format', 'pdf'); // default PDF
-
-        if ($format === 'word') {
-            return $reportService->generateWord($activity);
+        if ($activity->user_id !== auth()->id()) {
+            abort(403, 'Anda tidak memiliki akses ke laporan ini.');
         }
 
-        return $reportService->generatePDF($activity);
+        $categories = Category::all();
+        return view('penyuluh.activities.edit', compact('activity', 'categories'));
+    }
+
+    public function update(StoreActivityRequest $request, Activity $activity)
+    {
+        if ($activity->user_id !== auth()->id()) {
+            abort(403, 'Anda tidak memiliki akses.');
+        }
+
+        $validated = $request->validated();
+        $activity->update($validated);
+
+        if ($request->hasFile('photos')) {
+            $this->fileUploadService->uploadPhotos($activity, $request->file('photos'));
+        }
+
+        if ($request->hasFile('documents')) {
+            $this->fileUploadService->uploadDocuments($activity, $request->file('documents'));
+        }
+
+        return redirect()->route('penyuluh.activities.index')
+            ->with('success', 'Laporan kegiatan berhasil diperbarui!');
+    }
+
+    public function destroy(Activity $activity)
+    {
+        if ($activity->user_id !== auth()->id()) {
+            abort(403, 'Anda tidak memiliki akses.');
+        }
+
+        // Hapus file fisik via service sebelum hapus data di DB
+        $this->fileUploadService->deleteActivityFiles($activity);
+        $activity->delete();
+
+        return redirect()->route('penyuluh.activities.index')
+            ->with('success', 'Laporan kegiatan berhasil dihapus.');
+    }
+
+    // Fitur Cetak PDF Laporan Kegiatan
+    public function downloadPdf(Activity $activity)
+    {
+        if ($activity->user_id !== auth()->id()) {
+            abort(403);
+        }
+        return $this->reportService->generateSingleActivityPdf($activity);
     }
 }
