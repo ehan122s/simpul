@@ -80,68 +80,91 @@
         </div>
     </div>
 
+<script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        // 1. Fokuskan Peta ke area Bandung & Garut
-        var defaultLat = -7.0909; 
-        var defaultLng = 107.7500;
 
-        var map = L.map('map').setView([defaultLat, defaultLng], 10);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // Fokuskan Peta langsung ke pusat Kabupaten Garut
+                var defaultLat = -7.2279; 
+                var defaultLng = 107.9087;
+                var map = L.map('map').setView([defaultLat, defaultLng], 11); // Angka 11 agar zoom-nya pas di Garut
+                            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap'
+            }).addTo(map);
 
-        var marker = L.marker([defaultLat, defaultLng], {draggable: true}).addTo(map);
+            var marker = L.marker([defaultLat, defaultLng], {draggable: true}).addTo(map);
 
-        // Update input field ketika marker digeser manual
-        marker.on('dragend', function(event) {
-            var position = marker.getLatLng();
-            document.getElementById('latitude').value = position.lat;
-            document.getElementById('longitude').value = position.lng;
-        });
+            function defaultStyle() { return { color: "#16a34a", weight: 1.5, fillColor: "#22c55e", fillOpacity: 0.15 }; }
+            function activeStyle() { return { color: "#dc2626", weight: 3.5, fillColor: "#ef4444", fillOpacity: 0.35 }; }
 
-        // 2. Load File GeoJSON Batas Wilayah
-        // Pastikan nama file ini sesuai dengan yang kamu simpan di folder public/geojson/
-        fetch('/geojson/batas_wilayah.geojson')
-            .then(response => response.json())
-            .then(data => {
-                L.geoJSON(data, {
-                    // Beri warna tipis pada garis batas wilayah
-                    style: function (feature) {
-                        return {
-                            color: "#16a34a", // Warna hijau khas SIMPUL
-                            weight: 2,
-                            fillOpacity: 0.1,
-                            fillColor: "#16a34a"
-                        };
-                    },
-                    // Apa yang terjadi kalau wilayahnya di-klik (di-tap)?
+            var geojsonLayer;
+            var selectedLayer = null;
+
+            marker.on('dragend', function(event) {
+                var position = marker.getLatLng();
+                document.getElementById('latitude').value = position.lat;
+                document.getElementById('longitude').value = position.lng;
+            });
+
+            // LOAD DATA BANDUNG & GARUT SAJA
+            const geojsonUrls = [
+                '/geojson/garut.geojson' 
+            ];
+
+            Promise.all(geojsonUrls.map(url => fetch(url).then(res => res.ok ? res.json() : null).catch(() => null)))
+            .then(results => {
+                let combinedFeatures = [];
+                results.forEach(data => {
+                    if (data && data.features) {
+                        combinedFeatures = combinedFeatures.concat(data.features);
+                    }
+                });
+
+                if (combinedFeatures.length === 0) return;
+
+                let combinedGeoJSON = { type: "FeatureCollection", features: combinedFeatures };
+
+                geojsonLayer = L.geoJSON(combinedGeoJSON, {
+                    style: defaultStyle,
                     onEachFeature: function (feature, layer) {
                         layer.on('click', function (e) {
-                            // Pindahkan marker ke titik tengah wilayah yang di-klik
+                            if (selectedLayer) { geojsonLayer.resetStyle(selectedLayer); }
+                            layer.setStyle(activeStyle());
+                            selectedLayer = layer;
                             marker.setLatLng(e.latlng);
                             document.getElementById('latitude').value = e.latlng.lat;
                             document.getElementById('longitude').value = e.latlng.lng;
 
-                            // Opsional: Munculkan nama Kec/Desa (Sesuaikan 'NAMOBJ' dengan isi properties GeoJSON-mu)
-                            var namaWilayah = feature.properties.KECAMATAN || feature.properties.NAMOBJ || "Wilayah Terpilih";
-                            layer.bindPopup("Anda memilih: <b>" + namaWilayah + "</b>").openPopup();
+                            var namaKec = feature.properties.KECAMATAN || feature.properties.kecamatan || "Terpilih";
+                            var areaInMeters = turf.area(feature); 
+                            var areaInHa = (areaInMeters / 10000).toLocaleString('id-ID', { maximumFractionDigits: 2 });
+                            var areaInKm2 = (areaInMeters / 1000000).toLocaleString('id-ID', { maximumFractionDigits: 2 });
+
+                            var popupText = `
+                                <div style="font-family: sans-serif; min-width: 160px;">
+                                    <h4 style="margin:0 0 6px 0; color:#dc2626; font-size:14px; font-weight:bold; border-b:1px solid #fee2e2; padding-bottom:4px;">
+                                        📍 Kec. ${namaKec}
+                                    </h4>
+                                    <p style="margin: 2px 0; font-size: 12px; color: #374151;">
+                                        <b>Luas Area:</b><br>
+                                        <span style="color:#dc2626; font-weight:bold; font-size:13px;">± ${areaInHa} Ha</span><br>
+                                        <span style="color:#6b7280;">(${areaInKm2} km²)</span>
+                                    </p>
+                                </div>
+                            `;
+                            layer.bindPopup(popupText).openPopup();
                         });
                     }
                 }).addTo(map);
-            })
-            .catch(error => {
-                console.log("File GeoJSON belum ada atau gagal dimuat: ", error);
             });
 
-        // Update marker ketika map kosong diklik (jika di luar poligon)
-        map.on('click', function(e) {
-            marker.setLatLng(e.latlng);
-            document.getElementById('latitude').value = e.latlng.lat;
-            document.getElementById('longitude').value = e.latlng.lng;
+            map.on('click', function(e) {
+                marker.setLatLng(e.latlng);
+                document.getElementById('latitude').value = e.latlng.lat;
+                document.getElementById('longitude').value = e.latlng.lng;
+            });
         });
-    });
-</script>
+    </script>
 </x-app-layout>
