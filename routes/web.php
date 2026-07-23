@@ -11,8 +11,8 @@ use Illuminate\Support\Facades\Route;
 
 // Halaman Awal
 Route::get('/', function () {
-    return redirect()->route('login'); // Langsung kita arahkan ke halaman login
-});
+    return view('welcome');
+})->name('home');
 
 // Otomatisasi Redirect setelah Login (Opsional tapi berguna)
 Route::get('/dashboard', function () {
