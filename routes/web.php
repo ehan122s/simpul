@@ -3,6 +3,7 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Penyuluh\DashboardController as PenyuluhDashboard;
 use App\Http\Controllers\Penyuluh\ActivityController;
+use App\Http\Controllers\Penyuluh\MaterialController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboard;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\CategoryController;
@@ -11,10 +12,10 @@ use Illuminate\Support\Facades\Route;
 
 // Halaman Awal
 Route::get('/', function () {
-    return redirect()->route('login'); // Langsung kita arahkan ke halaman login
+    return redirect()->route('login');
 });
 
-// Otomatisasi Redirect setelah Login (Opsional tapi berguna)
+// Otomatisasi Redirect setelah Login
 Route::get('/dashboard', function () {
     if (auth()->user()->role === 'admin') {
         return redirect()->route('admin.dashboard');
@@ -37,6 +38,9 @@ Route::middleware(['auth', 'role:penyuluh'])->prefix('penyuluh')->name('penyuluh
     
     // Rute untuk Manajemen Kegiatan Penyuluh
     Route::resource('activities', ActivityController::class);
+    
+    // Rute untuk Pusat Materi Penyuluh
+    Route::resource('materi', MaterialController::class);
 });
 
 // ==========================================

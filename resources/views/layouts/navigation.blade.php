@@ -11,15 +11,20 @@
                 </div>
 
                 <!-- Navigation Links -->
+ @if(auth()->user()->role === 'penyuluh')                 
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                         {{ __('Dashboard') }}
                     </x-nav-link>
- @if(auth()->user()->role === 'penyuluh')
-            <x-nav-link :href="route('penyuluh.activities.index')" :active="request()->routeIs('penyuluh.activities.*')">
-                {{ __('Kegiatan Saya') }}
-              </x-nav-link>
- @endif
+
+    <x-nav-link :href="route('penyuluh.activities.index')" :active="request()->routeIs('penyuluh.activities.*')">
+        {{ __('Kegiatan Saya') }}
+    </x-nav-link>
+
+    <x-nav-link :href="route('penyuluh.materi.index')" :active="request()->routeIs('penyuluh.materi.*')">
+        {{ __('Pusat Materi') }}
+    </x-nav-link>
+@endif
                 </div>
             </div>
 

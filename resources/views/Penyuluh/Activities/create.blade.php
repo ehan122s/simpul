@@ -81,29 +81,67 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            var defaultLat = -6.200000;
-            var defaultLng = 106.816666;
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // 1. Fokuskan Peta ke area Bandung & Garut
+        var defaultLat = -7.0909; 
+        var defaultLng = 107.7500;
 
-            var map = L.map('map').setView([defaultLat, defaultLng], 13);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap contributors'
-            }).addTo(map);
+        var map = L.map('map').setView([defaultLat, defaultLng], 10);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
 
-            var marker = L.marker([defaultLat, defaultLng], {draggable: true}).addTo(map);
+        var marker = L.marker([defaultLat, defaultLng], {draggable: true}).addTo(map);
 
-            marker.on('dragend', function(event) {
-                var position = marker.getLatLng();
-                document.getElementById('latitude').value = position.lat;
-                document.getElementById('longitude').value = position.lng;
-            });
-
-            map.on('click', function(e) {
-                marker.setLatLng(e.latlng);
-                document.getElementById('latitude').value = e.latlng.lat;
-                document.getElementById('longitude').value = e.latlng.lng;
-            });
+        // Update input field ketika marker digeser manual
+        marker.on('dragend', function(event) {
+            var position = marker.getLatLng();
+            document.getElementById('latitude').value = position.lat;
+            document.getElementById('longitude').value = position.lng;
         });
-    </script>
+
+        // 2. Load File GeoJSON Batas Wilayah
+        // Pastikan nama file ini sesuai dengan yang kamu simpan di folder public/geojson/
+        fetch('/geojson/batas_wilayah.geojson')
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    // Beri warna tipis pada garis batas wilayah
+                    style: function (feature) {
+                        return {
+                            color: "#16a34a", // Warna hijau khas SIMPUL
+                            weight: 2,
+                            fillOpacity: 0.1,
+                            fillColor: "#16a34a"
+                        };
+                    },
+                    // Apa yang terjadi kalau wilayahnya di-klik (di-tap)?
+                    onEachFeature: function (feature, layer) {
+                        layer.on('click', function (e) {
+                            // Pindahkan marker ke titik tengah wilayah yang di-klik
+                            marker.setLatLng(e.latlng);
+                            document.getElementById('latitude').value = e.latlng.lat;
+                            document.getElementById('longitude').value = e.latlng.lng;
+
+                            // Opsional: Munculkan nama Kec/Desa (Sesuaikan 'NAMOBJ' dengan isi properties GeoJSON-mu)
+                            var namaWilayah = feature.properties.KECAMATAN || feature.properties.NAMOBJ || "Wilayah Terpilih";
+                            layer.bindPopup("Anda memilih: <b>" + namaWilayah + "</b>").openPopup();
+                        });
+                    }
+                }).addTo(map);
+            })
+            .catch(error => {
+                console.log("File GeoJSON belum ada atau gagal dimuat: ", error);
+            });
+
+        // Update marker ketika map kosong diklik (jika di luar poligon)
+        map.on('click', function(e) {
+            marker.setLatLng(e.latlng);
+            document.getElementById('latitude').value = e.latlng.lat;
+            document.getElementById('longitude').value = e.latlng.lng;
+        });
+    });
+</script>
 </x-app-layout>
